@@ -235,7 +235,8 @@ pipeline {
         // ──────────────────────────────────────────────
         // 12. DEPLOY WITH DOCKER COMPOSE
         //     Pulls the new image, then recreates only
-        //     changed containers — PostgreSQL stays up.
+        //     changed containers — PostgreSQL stays up
+        //     (it runs directly on the EC2 host, not in Docker).
         //     Prisma migrations run via docker-entrypoint.sh
         //     inside the app container on start.
         // ──────────────────────────────────────────────
@@ -266,6 +267,7 @@ pipeline {
                                 JWT_SECRET=${JWT_SECRET}
                                 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
                                 NEXTAUTH_URL=${NEXTAUTH_URL}
+                                NODE_ENV=production
                             """.stripIndent()
                         )
 
@@ -385,34 +387,15 @@ pipeline {
 
 // ──────────────────────────────────────────────
 // HELPER: Generate docker-compose.yml for deployment
-//     Includes Nginx reverse proxy, PostgreSQL, and
-//     the Next.js app on an isolated network.
+//     PostgreSQL runs directly on the EC2 host (not in Docker).
+//     The app container reaches it via host.docker.internal.
+//     Nginx proxies public port 80 to the app.
 // ──────────────────────────────────────────────
 def deployComposeTemplate(imageTag, dockerUsername, imageName) {
     return """
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: devops-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: \${DB_USER:-devops}
-      POSTGRES_PASSWORD: \${DB_PASS:-devops_password}
-      POSTGRES_DB: \${DB_NAME:-devops_dashboard}
-    expose:
-      - "5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \${DB_USER:-devops}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - app-network
-
   app:
     image: ${dockerUsername}/${imageName}:${imageTag}
     container_name: devops-app
@@ -421,9 +404,8 @@ services:
       - "3000"
     env_file:
       - .env
-    depends_on:
-      postgres:
-        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 30s
@@ -445,9 +427,6 @@ services:
       - app
     networks:
       - app-network
-
-volumes:
-  postgres_data:
 
 networks:
   app-network:
