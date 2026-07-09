@@ -11,6 +11,11 @@ pipeline {
 
         // --- Node & Build ---
         NODE_VERSION      = "22"
+        // Cap V8 heap on host-side stages. t2.micro has 1 GB total and Jenkins
+        // already uses ~430 MB, so we have ~150 MB to run npm/tsc. Setting
+        // --max-old-space-size forces V8 to swap to disk instead of being OOM-killed
+        // by the kernel when a single stage briefly exceeds the limit.
+        NODE_OPTIONS      = "--max-old-space-size=512"
 
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
@@ -165,14 +170,14 @@ pipeline {
                         echo "│  lacks the host's docker group membership.                   │"
                         echo "│                                                              │"
                         echo "│  Fix on the EC2 host:                                        │"
-                        echo "│    HOST_DOCKER_GID=\$(stat -c %g /var/run/docker.sock)        │"
+                        echo "│    HOST_DOCKER_GID=\$(stat -c %g /var/run/docker.sock)       │"
                         echo "│    docker stop jenkins                                       │"
-                        echo "│    docker run -d --name jenkins \\                            │"
-                        echo "│      --group-add \$HOST_DOCKER_GID \\                          │"
-                        echo "│      -v /var/run/docker.sock:/var/run/docker.sock \\          │"
-                        echo "│      -v /usr/bin/docker:/usr/bin/docker \\                    │"
-                        echo "│      -p 8080:8080 -p 50000:50000 \\                           │"
-                        echo "│      --restart unless-stopped \\                              │"
+                        echo "│    docker run -d --name jenkins \\                           │"
+                        echo "│      --group-add \$HOST_DOCKER_GID \\                        │"
+                        echo "│      -v /var/run/docker.sock:/var/run/docker.sock \\         │"
+                        echo "│      -v /usr/bin/docker:/usr/bin/docker \\                   │"
+                        echo "│      -p 8080:8080 -p 50000:50000 \\                          │"
+                        echo "│      --restart unless-stopped \\                             │"
                         echo "│      jenkins/jenkins:lts-jdk21                               │"
                         echo "└──────────────────────────────────────────────────────────────┘"
                         exit 1
@@ -183,15 +188,18 @@ pipeline {
 
         // ──────────────────────────────────────────────
         // 4. INSTALL DEPENDENCIES
+        //     Single host-side npm ci. The host stages that follow
+        //     (lint, tsc) only need this. next build and prisma generate
+        //     run inside the Docker builder, so we skip them on the
+        //     host to stay within t2.micro's 1 GB memory budget.
         // ──────────────────────────────────────────────
         stage("Install Dependencies") {
             steps {
-                sh "npm ci"
-            }
-            post {
-                success {
-                    stash name: "node_modules", includes: "node_modules/"
-                }
+                sh """
+                    # --prefer-offline + --no-audit + --no-fund keep peak RSS of the
+                    # npm subprocess well under 200 MB on a 1 GB host.
+                    npm ci --prefer-offline --no-audit --no-fund
+                """
             }
         }
 
@@ -200,38 +208,20 @@ pipeline {
         // ──────────────────────────────────────────────
         stage("Lint") {
             steps {
-                unstash "node_modules"
                 sh "npm run lint"
             }
         }
 
         // ──────────────────────────────────────────────
         // 6. TYPE CHECK
+        //     Prisma Generate + next build deliberately moved INTO the
+        //     Docker builder stage. They were duplicating work and their
+        //     host-side memory peaks (1.2 GB for next build) OOM-killed
+        //     Jenkins on the t2.micro instance.
         // ──────────────────────────────────────────────
         stage("TypeScript Check") {
             steps {
-                unstash "node_modules"
                 sh "npx tsc --noEmit"
-            }
-        }
-
-        // ──────────────────────────────────────────────
-        // 7. PRISMA GENERATE (client only — no DB needed)
-        // ──────────────────────────────────────────────
-        stage("Prisma Generate") {
-            steps {
-                unstash "node_modules"
-                sh "npx prisma generate"
-            }
-        }
-
-        // ──────────────────────────────────────────────
-        // 8. BUILD NEXT.JS
-        // ──────────────────────────────────────────────
-        stage("Build") {
-            steps {
-                unstash "node_modules"
-                sh "npm run build"
             }
         }
 
@@ -252,21 +242,28 @@ pipeline {
                         │  Docker is not accessible inside Jenkins.    │
                         │                                              │
                         │  On EC2, run:                                │
-                        │    docker exec -it jenkins docker version     │
+                        │    docker exec -it jenkins docker version    │
                         │                                              │
-                        │  If it fails, mount the Docker socket:        │
-                        │    docker run ... -v /var/run/docker.sock:/   │
-                        │         var/run/docker.sock ...               │
+                        │  If it fails, mount the Docker socket:       │
+                        │    docker run ... -v /var/run/docker.sock:/  │
+                        │         var/run/docker.sock ...              │
                         └──────────────────────────────────────────────┘
                         """
                     }
                 }
                 sh """
-                    docker build \\
-                        --pull \\
-                        -f docker/Dockerfile \\
-                        -t ${FULL_IMAGE} \\
-                        -t ${FULL_IMAGE_LATEST} \\
+                    # BUILDKIT_PROGRESS=plain keeps BuildKit from buffering
+                    # interactive progress state in memory on the daemon.
+                    # --memory / --memory-swap cap the build container so it
+                    # can't OOM-kill the whole 1 GB host.
+                    DOCKER_BUILDKIT=1 BUILDKIT_PROGRESS=plain \
+                    docker build \
+                        --pull \
+                        --memory=768m \
+                        --memory-swap=1536m \
+                        -f docker/Dockerfile \
+                        -t ${FULL_IMAGE} \
+                        -t ${FULL_IMAGE_LATEST} \
                         .
                 """
             }
