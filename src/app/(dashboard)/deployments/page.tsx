@@ -60,6 +60,8 @@ export default function DeploymentsPage() {
   }, [])
 
   useEffect(() => {
+    // See activity/page.tsx for rationale on why this fetch is in useEffect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchDeployments()
   }, [fetchDeployments])
 

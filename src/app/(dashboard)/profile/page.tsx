@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { PageSkeleton } from "@/components/loading-skeleton"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { useToast } from "@/components/toast-provider"
@@ -40,6 +39,8 @@ export default function ProfilePage() {
   }, [])
 
   useEffect(() => {
+    // See activity/page.tsx for rationale on why this fetch is in useEffect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchProfile()
   }, [fetchProfile])
 

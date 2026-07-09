@@ -38,6 +38,12 @@ export default function ActivityPage() {
   }, [])
 
   useEffect(() => {
+    // Data fetches legitimately need to live in an effect — there's no
+    // external-store equivalent for an HTTP request. The setStates below
+    // happen after awaits, so they don't trigger the cascading render the
+    // rule is trying to prevent. Disable per-line rather than refactor
+    // to a query library, since this is a single read-only fetch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchActivities()
   }, [fetchActivities])
 

@@ -56,6 +56,8 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
+    // See activity/page.tsx for rationale on why this fetch is in useEffect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers()
   }, [fetchUsers])
 

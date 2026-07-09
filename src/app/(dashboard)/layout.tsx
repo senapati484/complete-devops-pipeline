@@ -12,7 +12,6 @@ import {
   Settings,
   Shield,
   Menu,
-  X,
   Search,
   Bell,
   ChevronDown,

@@ -11,7 +11,6 @@ import {
   Users,
   Shield,
   ChevronDown,
-  Check,
   ArrowRight,
   Star,
   Mail,

@@ -4,18 +4,14 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 import {
-  Activity,
   LayoutDashboard,
   Users,
   Package,
   Settings,
   Menu,
-  X,
   ArrowLeft,
   Shield,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { cn } from "@/lib/utils"
 import { apiFetch } from "@/lib/api"

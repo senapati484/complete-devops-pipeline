@@ -20,27 +20,26 @@ export function ThemeProvider({
   children,
   defaultTheme = "system",
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme)
+  // Read the persisted theme synchronously on the first render so the
+  // initial state already matches localStorage — no effect, no setState.
+  // (React 19's react-hooks/set-state-in-effect rule disallows reading
+  // external systems inside useEffect and calling setState in the same
+  // tick; lazy state initializers are the supported alternative.)
+  const [theme, setThemeState] = useState<Theme>(() => {
+    if (typeof window === "undefined") return defaultTheme
+    try {
+      const stored = window.localStorage.getItem("theme") as Theme | null
+      return stored ?? defaultTheme
+    } catch {
+      return defaultTheme
+    }
+  })
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme)
     try {
       localStorage.setItem("theme", newTheme)
     } catch {}
-  }, [])
-
-  useEffect(() => {
-    const stored = (() => {
-      try {
-        return localStorage.getItem("theme") as Theme | null
-      } catch {
-        return null
-      }
-    })()
-
-    if (stored) {
-      setThemeState(stored)
-    }
   }, [])
 
   useEffect(() => {
