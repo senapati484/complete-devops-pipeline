@@ -15,7 +15,7 @@ pipeline {
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
         DEPLOY_DIR        = "/home/ubuntu/deployments/${IMAGE_NAME}"
-        HEALTH_URL        = "http://localhost:3000/api/health"
+        HEALTH_URL        = "http://localhost/api/health"
         HEALTH_RETRIES    = "12"
         HEALTH_INTERVAL   = "10"
 
@@ -23,7 +23,6 @@ pipeline {
         DOCKER_HUB_CRED   = "dockerhub"
         DB_URL_CRED       = "DATABASE_URL"
         JWT_SECRET_CRED   = "JWT_SECRET"
-        GITHUB_CRED       = "github"
     }
 
     options {
@@ -69,7 +68,25 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 2. PRE-FLIGHT CHECKS
+        // 2. SETUP NODE
+        //     Runs before Pre-flight Checks so node/npm
+        //     are in PATH when we verify them.
+        // ──────────────────────────────────────────────
+        stage("Setup Node") {
+            steps {
+                script {
+                    try {
+                        env.NODEJS_HOME = tool name: "NodeJS ${NODE_VERSION}", type: "nodejs"
+                        env.PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
+                    } catch (Exception e) {
+                        echo "NodeJS tool not configured in Jenkins; using system Node.js"
+                    }
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // 3. PRE-FLIGHT CHECKS
         //     Fail fast if required tooling is missing.
         // ──────────────────────────────────────────────
         stage("Pre-flight Checks") {
@@ -83,22 +100,6 @@ pipeline {
                     npm --version
                     echo "=== All tools available ==="
                 """
-            }
-        }
-
-        // ──────────────────────────────────────────────
-        // 3. SETUP NODE
-        // ──────────────────────────────────────────────
-        stage("Setup Node") {
-            steps {
-                script {
-                    try {
-                        env.NODEJS_HOME = tool name: "NodeJS ${NODE_VERSION}", type: "nodejs"
-                        env.PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
-                    } catch (Exception e) {
-                        echo "NodeJS tool not configured in Jenkins; using system Node.js"
-                    }
-                }
             }
         }
 
@@ -154,20 +155,16 @@ pipeline {
                 unstash "node_modules"
                 sh "npm run build"
             }
-            post {
-                success {
-                    stash name: "build-output", includes: ".next/**, public/**"
-                }
-            }
         }
 
         // ──────────────────────────────────────────────
         // 9. BUILD DOCKER IMAGE
+        //     The Dockerfile handles its own npm install,
+        //     prisma generate, and next build inside the
+        //     builder stage — no stashes needed here.
         // ──────────────────────────────────────────────
         stage("Build Docker Image") {
             steps {
-                unstash "node_modules"
-                unstash "build-output"
                 script {
                     try {
                         sh "docker version --format '{{.Server.Version}}'"
@@ -225,10 +222,10 @@ pipeline {
 
         // ──────────────────────────────────────────────
         // 12. DEPLOY WITH DOCKER COMPOSE
-        //     Uses `pull + up` instead of `down + up` to
-        //     avoid restarting PostgreSQL unnecessarily.
+        //     Pulls the new image, then recreates only
+        //     changed containers — PostgreSQL stays up.
         //     Prisma migrations run via docker-entrypoint.sh
-        //     on container start — no separate stage needed.
+        //     inside the app container on start.
         // ──────────────────────────────────────────────
         stage("Deploy") {
             steps {
@@ -256,11 +253,11 @@ pipeline {
                             """.stripIndent()
                         )
 
-                        // Pull the new image first
-                        sh "docker pull ${FULL_IMAGE}"
+                        // Copy nginx config alongside the compose file
+                        sh "cp nginx/nginx.conf ${DEPLOY_DIR}/nginx.conf"
 
-                        // Recreate only changed containers (Postgres stays up)
-                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans --pull missing"
+                        sh "docker pull ${FULL_IMAGE}"
+                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
                     }
                 }
             }
@@ -356,7 +353,6 @@ pipeline {
                 echo "Cleaning up workspace ..."
                 cleanWs()
 
-                // Remove old images, keeping the 5 most recent by creation date
                 sh """
                     docker images ${DOCKER_USERNAME}/${IMAGE_NAME} \\
                         --format "{{.CreatedAt}}\\t{{.Repository}}:{{.Tag}}" \\
@@ -372,6 +368,8 @@ pipeline {
 
 // ──────────────────────────────────────────────
 // HELPER: Generate docker-compose.yml for deployment
+//     Includes Nginx reverse proxy, PostgreSQL, and
+//     the Next.js app on an isolated network.
 // ──────────────────────────────────────────────
 def deployComposeTemplate(imageTag, dockerUsername, imageName) {
     return """
@@ -395,26 +393,47 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
 
   app:
     image: ${dockerUsername}/${imageName}:${imageTag}
     container_name: devops-app
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     env_file:
       - .env
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://nginx/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: devops-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+    networks:
+      - app-network
 
 volumes:
   postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
 """.stripIndent()
 }
