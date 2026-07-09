@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // --- Docker Hub Configuration ---
-        DOCKER_USERNAME = "senapati484"
+        DOCKER_USERNAME  = "senapati484"
         IMAGE_NAME       = "devops-control-center"
         IMAGE_TAG        = "${env.BUILD_ID}"
         FULL_IMAGE       = "${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -15,12 +15,15 @@ pipeline {
         // --- Deployment ---
         COMPOSE_PROJECT  = "devops-control-center"
         DEPLOY_DIR       = "/home/ubuntu/deployments/${IMAGE_NAME}"
+        APP_CONTAINER    = "devops-app"
         HEALTH_URL       = "http://localhost:3000/api/health"
         HEALTH_RETRIES   = "12"
         HEALTH_INTERVAL  = "10"
 
-        // --- Notifications (optional, uncomment when ready) ---
-        // SLACK_CHANNEL = "#deployments"
+        // --- Credential IDs (configure in Jenkins → Manage Credentials) ---
+        DOCKER_HUB_CRED   = "dockerhub"
+        DB_URL_CRED       = "DATABASE_URL"
+        JWT_SECRET_CRED   = "JWT_SECRET"
     }
 
     options {
@@ -71,8 +74,6 @@ pipeline {
         stage("Setup Node") {
             steps {
                 script {
-                    // Use Jenkins NodeJS plugin tool if configured,
-                    // otherwise fall back to system node.
                     try {
                         env.NODEJS_HOME = tool name: "NodeJS ${NODE_VERSION}", type: "nodejs"
                         env.PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
@@ -85,25 +86,14 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 3. INSTALL DEPENDENCIES (with caching)
+        // 3. INSTALL DEPENDENCIES
         // ──────────────────────────────────────────────
         stage("Install Dependencies") {
             steps {
-                script {
-                    // Cache node_modules across builds for speed
-                    def cacheKey = "npm-${hashFiles('package-lock.json')}"
-
-                    // If lockfile hasn't changed, restore cached node_modules
-                    if (fileExists("node_modules") && fileExists("package-lock.json")) {
-                        echo "node_modules already exists — skipping install"
-                    } else {
-                        sh "npm install"
-                    }
-                }
+                sh "npm install"
             }
             post {
                 success {
-                    // Stash node_modules for downstream stages
                     stash name: "node_modules", includes: "node_modules/"
                 }
             }
@@ -130,15 +120,12 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 6. PRISMA — Generate Client & Push Schema
+        // 6. PRISMA GENERATE (client only — no DB needed)
         // ──────────────────────────────────────────────
-        stage("Prisma Setup") {
+        stage("Prisma Generate") {
             steps {
                 unstash "node_modules"
                 sh "npx prisma generate"
-                // Migrate or push schema to the database specified in
-                // the Jenkins credential DATABASE_URL.
-                sh "npx prisma db push --accept-data-loss --skip-generate"
             }
         }
 
@@ -152,7 +139,6 @@ pipeline {
             }
             post {
                 success {
-                    // Stash the .next build output for Docker stage
                     stash name: "build-output", includes: ".next/**, public/**"
                 }
             }
@@ -166,7 +152,6 @@ pipeline {
                 unstash "node_modules"
                 unstash "build-output"
                 script {
-                    // Verify Docker is accessible from Jenkins
                     try {
                         sh "docker version --format '{{.Server.Version}}'"
                     } catch (Exception e) {
@@ -174,12 +159,12 @@ pipeline {
                         ┌──────────────────────────────────────────────┐
                         │  Docker is not accessible inside Jenkins.    │
                         │                                              │
-                        │  Run this on your EC2 to fix:                │
-                        │  docker exec -it jenkins docker version      │
+                        │  On EC2, run:                                │
+                        │    docker exec -it jenkins docker version     │
                         │                                              │
-                        │  If that fails, mount the Docker socket:     │
-                        │  docker run ... -v /var/run/docker.sock:/    │
-                        │       var/run/docker.sock ...                │
+                        │  If it fails, mount the Docker socket:        │
+                        │    docker run ... -v /var/run/docker.sock:/   │
+                        │         var/run/docker.sock ...               │
                         └──────────────────────────────────────────────┘
                         """
                     }
@@ -201,14 +186,12 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: "dockerhub",
+                        credentialsId: "${DOCKER_HUB_CRED}",
                         usernameVariable: "DOCKER_USER",
                         passwordVariable: "DOCKER_PASS"
                     )
                 ]) {
-                    sh """
-                        echo "\\\$DOCKER_PASS" | docker login -u "\\\$DOCKER_USER" --password-stdin
-                    """.stripIndent()
+                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
                 }
             }
         }
@@ -224,45 +207,67 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 11. ZERO-DOWNTIME DEPLOYMENT
+        // 11. DEPLOY WITH DOCKER COMPOSE
+        //     (requires DATABASE_URL, JWT_SECRET in Jenkins
+        //      Credentials with those exact IDs)
         // ──────────────────────────────────────────────
         stage("Deploy") {
             steps {
-                script {
-                    // Ensure deployment directory exists on the host
-                    sh "mkdir -p ${DEPLOY_DIR}"
+                withCredentials([
+                    string(credentialsId: "${DB_URL_CRED}", variable: "DATABASE_URL"),
+                    string(credentialsId: "${JWT_SECRET_CRED}", variable: "JWT_SECRET")
+                ]) {
+                    script {
+                        sh "mkdir -p ${DEPLOY_DIR}"
 
-                    // Write docker-compose.yml to the deploy directory
-                    // so the running app picks up the latest image tag.
-                    writeFile(
-                        file: "${DEPLOY_DIR}/docker-compose.yml",
-                        text: deployComposeTemplate(env.IMAGE_TAG, env.DOCKER_USERNAME)
-                    )
+                        writeFile(
+                            file: "${DEPLOY_DIR}/docker-compose.yml",
+                            text: deployComposeTemplate(
+                                env.IMAGE_TAG,
+                                env.DOCKER_USERNAME,
+                                env.IMAGE_NAME
+                            )
+                        )
 
-                    // Pull the specific image tag (ensures we run exactly what was built)
-                    sh "docker pull ${FULL_IMAGE}"
+                        writeFile(
+                            file: "${DEPLOY_DIR}/.env",
+                            text: """
+                                DATABASE_URL=${DATABASE_URL}
+                                JWT_SECRET=${JWT_SECRET}
+                            """.stripIndent()
+                        )
 
-                    // Gracefully stop the old container (if running)
-                    sh """
-                        docker compose \\
-                            -p ${COMPOSE_PROJECT} \\
-                            -f ${DEPLOY_DIR}/docker-compose.yml \\
-                            down --remove-orphans || true
-                    """
-
-                    // Start the new container
-                    sh """
-                        docker compose \\
-                            -p ${COMPOSE_PROJECT} \\
-                            -f ${DEPLOY_DIR}/docker-compose.yml \\
-                            up -d --remove-orphans
-                    """
+                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml down --remove-orphans || true"
+                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
+                    }
                 }
             }
         }
 
         // ──────────────────────────────────────────────
-        // 12. HEALTH CHECK (with automatic rollback)
+        // 12. RUN DB MIGRATIONS
+        //     (PostgreSQL is now live inside the compose stack)
+        // ──────────────────────────────────────────────
+        stage("DB Migration") {
+            steps {
+                withCredentials([
+                    string(credentialsId: "${DB_URL_CRED}", variable: "DATABASE_URL")
+                ]) {
+                    script {
+                        echo "Waiting for PostgreSQL to be ready ..."
+                        sleep(time: 15, unit: "SECONDS")
+
+                        sh """
+                            docker exec ${APP_CONTAINER} \\
+                                sh -c "export DATABASE_URL='${DATABASE_URL}' && npx prisma db push --accept-data-loss --skip-generate"
+                        """
+                    }
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // 13. HEALTH CHECK (with automatic rollback)
         // ──────────────────────────────────────────────
         stage("Health Check") {
             steps {
@@ -274,18 +279,16 @@ pipeline {
 
                     for (int i = 0; i < attempts; i++) {
                         try {
-                            def response = sh(
-                                script: """
-                                    curl -sf ${HEALTH_URL} 2>/dev/null \\
-                                        | python3 -c "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('status')=='ok' else 1)"
-                                """.stripIndent().replaceAll("\\n", " "),
-                                returnStdout: false
-                            )
+                            sh """
+                                curl -sf ${HEALTH_URL} 2>/dev/null \\
+                                    | python3 -c \\
+                                        "import sys,json; d=json.load(sys.stdin); exit(0 if d.get('status')=='ok' else 1)"
+                            """.stripIndent().replaceAll("\\n", " ")
                             healthy = true
-                            echo "✅ Health check passed! (attempt ${i + 1}/${attempts})"
+                            echo "Health check passed! (attempt ${i + 1}/${attempts})"
                             break
                         } catch (Exception e) {
-                            echo "⏳ Health check attempt ${i + 1}/${attempts} failed — retrying in ${HEALTH_INTERVAL}s ..."
+                            echo "Health check attempt ${i + 1}/${attempts} failed -- retrying in ${HEALTH_INTERVAL}s ..."
                             sleep(time: HEALTH_INTERVAL.toInteger(), unit: "SECONDS")
                         }
                     }
@@ -293,9 +296,8 @@ pipeline {
                     if (!healthy) {
                         error """
                         ┌──────────────────────────────────────────────┐
-                        │  ❌ HEALTH CHECK FAILED                     │
-                        │                                              │
-                        │  Rolling back to previous version...         │
+                        │  HEALTH CHECK FAILED                        │
+                        │  Rolling back to previous stable version... │
                         └──────────────────────────────────────────────┘
                         """
                     }
@@ -310,50 +312,35 @@ pipeline {
     post {
         success {
             script {
-                def message = """
+                echo """
                 ┌──────────────────────────────────────────────┐
-                │  ✅ DEPLOYMENT SUCCESSFUL                    │
-                │                                              │
+                │  DEPLOYMENT SUCCESSFUL                       │
                 │  Image : ${FULL_IMAGE}                       │
                 │  Branch: ${env.BRANCH}                       │
                 │  Commit: ${env.GIT_COMMIT_SHORT}             │
                 │  Env   : ${params.ENVIRONMENT}               │
                 └──────────────────────────────────────────────┘
-                """
-                echo message.stripIndent()
-
-                // Uncomment for Slack notifications
-                // slackSend(
-                //     channel: env.SLACK_CHANNEL,
-                //     color: "good",
-                //     message: "✅ Deployment successful: ${FULL_IMAGE} (${env.BRANCH})"
-                // )
+                """.stripIndent()
             }
         }
 
         failure {
             script {
-                def message = """
+                echo """
                 ┌──────────────────────────────────────────────┐
-                │  ❌ DEPLOYMENT FAILED                        │
-                │                                              │
+                │  DEPLOYMENT FAILED                           │
                 │  Branch: ${env.BRANCH}                       │
                 │  Commit: ${env.GIT_COMMIT_SHORT}             │
-                │  Env   : ${params.ENVIRONMENT}               │
-                │                                              │
                 │  Rolling back to previous stable version...  │
                 └──────────────────────────────────────────────┘
-                """
-                echo message.stripIndent()
+                """.stripIndent()
 
-                // Rollback: restart previous stable image
                 sh """
                     docker compose \\
                         -p ${COMPOSE_PROJECT} \\
                         -f ${DEPLOY_DIR}/docker-compose.yml \\
                         down --remove-orphans || true
                 """
-                // Re-pull and start the "latest" tag (previous stable)
                 sh """
                     docker pull ${FULL_IMAGE_LATEST}
                     docker compose \\
@@ -361,26 +348,21 @@ pipeline {
                         -f ${DEPLOY_DIR}/docker-compose.yml \\
                         up -d --remove-orphans
                 """
-
-                // Uncomment for Slack notifications
-                // slackSend(
-                //     channel: env.SLACK_CHANNEL,
-                //     color: "danger",
-                //     message: "❌ Deployment failed: ${FULL_IMAGE} — rolling back"
-                // )
             }
         }
 
         always {
             script {
-                echo "🧹 Cleaning up workspace ..."
+                echo "Cleaning up workspace ..."
                 cleanWs()
 
-                // Clean up old Docker images (keep last 5)
+                // Remove old images, keeping the 5 most recent by creation date
                 sh """
                     docker images ${DOCKER_USERNAME}/${IMAGE_NAME} \\
-                        --format "{{.Repository}}:{{.Tag}}" \\
+                        --format "{{.CreatedAt}}\\t{{.Repository}}:{{.Tag}}" \\
+                        | sort -r \\
                         | tail -n +6 \\
+                        | cut -f2 \\
                         | xargs -r docker rmi || true
                 """
             }
@@ -391,7 +373,7 @@ pipeline {
 // ──────────────────────────────────────────────
 // HELPER: Generate docker-compose.yml for deployment
 // ──────────────────────────────────────────────
-def deployComposeTemplate(imageTag, dockerUsername) {
+def deployComposeTemplate(imageTag, dockerUsername, imageName) {
     return """
 version: "3.8"
 
@@ -415,15 +397,13 @@ services:
       retries: 5
 
   app:
-    image: ${dockerUsername}/${IMAGE_NAME}:${imageTag}
+    image: ${dockerUsername}/${imageName}:${imageTag}
     container_name: devops-app
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      DATABASE_URL: \${DATABASE_URL}
-      JWT_SECRET: \${JWT_SECRET}
-      NODE_ENV: production
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
