@@ -20,12 +20,13 @@ pipeline {
         HEALTH_INTERVAL   = "10"
 
         // --- Credential IDs (configure in Jenkins → Manage Credentials) ---
-        GITHUB_CRED       = "github"
-        DOCKER_HUB_CRED   = "dockerhub"
-        DB_URL_CRED       = "DATABASE_URL"
-        JWT_SECRET_CRED   = "JWT_SECRET"
-        NEXTAUTH_SECRET_CRED = "NEXTAUTH_SECRET"
-        NEXTAUTH_URL_CRED    = "NEXTAUTH_URL"
+        GITHUB_CRED           = "github"
+        DOCKER_HUB_CRED       = "dockerhub"
+        DB_URL_CRED           = "DATABASE_URL"
+        JWT_SECRET_CRED       = "JWT_SECRET"
+        NEXTAUTH_SECRET_CRED  = "NEXTAUTH_SECRET"
+        NEXTAUTH_URL_CRED     = "NEXTAUTH_URL"
+        POSTGRES_PASSWORD_CRED = "POSTGRES_PASSWORD"
     }
 
     options {
@@ -78,7 +79,21 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 2. SETUP NODE
+        // 2. BUILD INFO
+        //     Sets human-readable build display name.
+        // ──────────────────────────────────────────────
+        stage("Build Info") {
+            steps {
+                script {
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} - ${params.BRANCH}"
+                    currentBuild.description = "${env.GIT_COMMIT_SHORT}"
+                    echo "Build: ${currentBuild.displayName}"
+                }
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // 3. SETUP NODE
         //     Runs before Pre-flight Checks so node/npm
         //     are in PATH when we verify them.
         // ──────────────────────────────────────────────
@@ -235,10 +250,10 @@ pipeline {
         // ──────────────────────────────────────────────
         // 12. DEPLOY WITH DOCKER COMPOSE
         //     Pulls the new image, then recreates only
-        //     changed containers — PostgreSQL stays up
-        //     (it runs directly on the EC2 host, not in Docker).
-        //     Prisma migrations run via docker-entrypoint.sh
-        //     inside the app container on start.
+        //     changed containers. PostgreSQL starts first
+        //     (Docker Compose health check ensures it's ready
+        //     before the app starts). Prisma migrations run
+        //     via docker-entrypoint.sh on app container start.
         // ──────────────────────────────────────────────
         stage("Deploy") {
             steps {
@@ -246,7 +261,8 @@ pipeline {
                     string(credentialsId: "${DB_URL_CRED}", variable: "DATABASE_URL"),
                     string(credentialsId: "${JWT_SECRET_CRED}", variable: "JWT_SECRET"),
                     string(credentialsId: "${NEXTAUTH_SECRET_CRED}", variable: "NEXTAUTH_SECRET"),
-                    string(credentialsId: "${NEXTAUTH_URL_CRED}", variable: "NEXTAUTH_URL")
+                    string(credentialsId: "${NEXTAUTH_URL_CRED}", variable: "NEXTAUTH_URL"),
+                    string(credentialsId: "${POSTGRES_PASSWORD_CRED}", variable: "POSTGRES_PASSWORD")
                 ]) {
                     script {
                         sh "mkdir -p ${DEPLOY_DIR}"
@@ -267,6 +283,9 @@ pipeline {
                                 JWT_SECRET=${JWT_SECRET}
                                 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
                                 NEXTAUTH_URL=${NEXTAUTH_URL}
+                                POSTGRES_USER=postgres
+                                POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+                                POSTGRES_DB=devops_dashboard
                                 NODE_ENV=production
                             """.stripIndent()
                         )
@@ -387,8 +406,7 @@ pipeline {
 
 // ──────────────────────────────────────────────
 // HELPER: Generate docker-compose.yml for deployment
-//     PostgreSQL runs directly on the EC2 host (not in Docker).
-//     The app container reaches it via host.docker.internal.
+//     PostgreSQL runs inside Docker alongside the app.
 //     Nginx proxies public port 80 to the app.
 // ──────────────────────────────────────────────
 def deployComposeTemplate(imageTag, dockerUsername, imageName) {
@@ -396,6 +414,26 @@ def deployComposeTemplate(imageTag, dockerUsername, imageName) {
 version: "3.8"
 
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: devops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: \${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
+      POSTGRES_DB: \${POSTGRES_DB:-devops_dashboard}
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   app:
     image: ${dockerUsername}/${imageName}:${imageTag}
     container_name: devops-app
@@ -404,8 +442,9 @@ services:
       - "3000"
     env_file:
       - .env
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 30s
@@ -427,6 +466,9 @@ services:
       - app
     networks:
       - app-network
+
+volumes:
+  postgres_data:
 
 networks:
   app-network:
