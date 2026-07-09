@@ -43,7 +43,17 @@ echo "║  DevOps Control Center — Pre-flight Checks                   ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo
 
-PUBLIC_IP="$(curl -fsS --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo '<unavailable>')"
+# IMDSv2: require a session token first; fall back to IMDSv1 if the PUT fails.
+# Many hardened AWS accounts (e.g. those with "HttpTokens=required") reject the
+# plain GET, so the IP would show as <unavailable> otherwise.
+IMDS_TOKEN="$(curl -fsS --max-time 3 -X PUT http://169.254.169.254/latest/api/token \
+    -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' 2>/dev/null || true)"
+if [ -n "$IMDS_TOKEN" ]; then
+    PUBLIC_IP="$(curl -fsS --max-time 3 -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+        http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo '<unavailable>')"
+else
+    PUBLIC_IP="$(curl -fsS --max-time 3 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo '<unavailable>')"
+fi
 if [ "$PUBLIC_IP" = "<unavailable>" ]; then
     warn "Could not auto-detect public IP from EC2 metadata service."
     warn "Are you running this on the EC2 host? You can override with: PUBLIC_IP=x.x.x.x ./preflight.sh"

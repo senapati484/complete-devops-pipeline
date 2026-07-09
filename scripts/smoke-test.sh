@@ -28,7 +28,17 @@ fail() { FAIL=$((FAIL+1)); printf "${RED}✗${NC} %s\n" "$1"; }
 info() { printf "${BLUE}»${NC} %s\n" "$1"; }
 section() { echo; printf "${BLUE}━━━ %s ━━━${NC}\n" "$1"; }
 
-PUBLIC_IP="${PUBLIC_IP:-$(curl -fsS --max-time 5 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo '<unavailable>')}"
+if [ -z "${PUBLIC_IP:-}" ]; then
+    # IMDSv2 first (token PUT), then IMDSv1 fallback. See preflight.sh for rationale.
+    IMDS_TOKEN="$(curl -fsS --max-time 3 -X PUT http://169.254.169.254/latest/api/token \
+        -H 'X-aws-ec2-metadata-token-ttl-seconds: 21600' 2>/dev/null || true)"
+    if [ -n "$IMDS_TOKEN" ]; then
+        PUBLIC_IP="$(curl -fsS --max-time 3 -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+            http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo '<unavailable>')"
+    else
+        PUBLIC_IP="$(curl -fsS --max-time 3 http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || echo '<unavailable>')"
+    fi
+fi
 
 echo "╔══════════════════════════════════════════════════════════════╗"
 echo "║  DevOps Control Center — Post-deploy Smoke Test             ║"
