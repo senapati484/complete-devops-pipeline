@@ -20,6 +20,7 @@ pipeline {
         HEALTH_INTERVAL   = "10"
 
         // --- Credential IDs (configure in Jenkins → Manage Credentials) ---
+        GITHUB_CRED       = "github"
         DOCKER_HUB_CRED   = "dockerhub"
         DB_URL_CRED       = "DATABASE_URL"
         JWT_SECRET_CRED   = "JWT_SECRET"
@@ -54,7 +55,14 @@ pipeline {
         // ──────────────────────────────────────────────
         stage("Checkout") {
             steps {
-                checkout scm
+                checkout([
+                    $class: "GitSCM",
+                    branches: [[name: "*/${params.BRANCH}"]],
+                    userRemoteConfigs: [[
+                        url: "https://github.com/senapati484/complete-devops-pipeline.git",
+                        credentialsId: "${GITHUB_CRED}"
+                    ]]
+                ])
                 script {
                     env.GIT_COMMIT_SHORT = sh(
                         script: "git rev-parse --short HEAD",
@@ -110,7 +118,7 @@ pipeline {
         // ──────────────────────────────────────────────
         stage("Install Dependencies") {
             steps {
-                sh "npm install"
+                sh "npm ci"
             }
             post {
                 success {
@@ -187,6 +195,7 @@ pipeline {
                 }
                 sh """
                     docker build \\
+                        --pull \\
                         -f docker/Dockerfile \\
                         -t ${FULL_IMAGE} \\
                         -t ${FULL_IMAGE_LATEST} \\
@@ -208,6 +217,7 @@ pipeline {
                     )
                 ]) {
                     sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin'
+                    sh "docker info"
                 }
             }
         }
@@ -263,6 +273,7 @@ pipeline {
                         sh "cp nginx/nginx.conf ${DEPLOY_DIR}/nginx.conf"
 
                         sh "docker pull ${FULL_IMAGE}"
+                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml pull"
                         sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
                     }
                 }
