@@ -125,6 +125,32 @@ pipeline {
                     node --version
                     npm --version
                     echo "=== All tools available ==="
+
+                    # Fail fast with a clear error if Jenkins can't drive the host's Docker daemon.
+                    # This is the most common first-build failure on EC2: the socket is bind-mounted
+                    # but the jenkins user lacks the host's docker group membership.
+                    if ! docker info >/dev/null 2>&1; then
+                        echo ""
+                        echo "┌──────────────────────────────────────────────────────────────┐"
+                        echo "│  DOCKER SOCKET UNREACHABLE FROM JENKINS                      │"
+                        echo "│                                                              │"
+                        echo "│  Jenkins is running in a container but cannot drive the host │"
+                        echo "│  Docker daemon. The socket is mounted but the jenkins user   │"
+                        echo "│  lacks the host's docker group membership.                   │"
+                        echo "│                                                              │"
+                        echo "│  Fix on the EC2 host:                                        │"
+                        echo "│    HOST_DOCKER_GID=\$(stat -c %g /var/run/docker.sock)        │"
+                        echo "│    docker stop jenkins                                       │"
+                        echo "│    docker run -d --name jenkins \\                            │"
+                        echo "│      --group-add \$HOST_DOCKER_GID \\                          │"
+                        echo "│      -v /var/run/docker.sock:/var/run/docker.sock \\          │"
+                        echo "│      -v /usr/bin/docker:/usr/bin/docker \\                    │"
+                        echo "│      -p 8080:8080 -p 50000:50000 \\                           │"
+                        echo "│      --restart unless-stopped \\                              │"
+                        echo "│      jenkins/jenkins:lts-jdk21                               │"
+                        echo "└──────────────────────────────────────────────────────────────┘"
+                        exit 1
+                    fi
                 """
             }
         }
@@ -295,8 +321,8 @@ pipeline {
                         sh "cp nginx/nginx.conf ${DEPLOY_DIR}/nginx.conf"
 
                         sh "docker pull ${FULL_IMAGE}"
-                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml pull"
-                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
+                        sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml pull"
+                        sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
                     }
                 }
             }
@@ -373,14 +399,14 @@ pipeline {
 
                 sh """
                     docker compose \\
-                        -p ${COMPOSE_PROJECT} \\
+                        --project-name ${COMPOSE_PROJECT} \\
                         -f ${DEPLOY_DIR}/docker-compose.yml \\
                         down --remove-orphans || true
                 """
                 sh """
                     docker pull ${FULL_IMAGE_LATEST}
                     docker compose \\
-                        -p ${COMPOSE_PROJECT} \\
+                        --project-name ${COMPOSE_PROJECT} \\
                         -f ${DEPLOY_DIR}/docker-compose.yml \\
                         up -d --remove-orphans
                 """
