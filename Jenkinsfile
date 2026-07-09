@@ -15,7 +15,7 @@ pipeline {
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
         DEPLOY_DIR        = "/home/ubuntu/deployments/${IMAGE_NAME}"
-        HEALTH_URL        = "http://localhost/api/health"
+        HEALTH_URL        = "http://localhost:3000/api/health"
         HEALTH_RETRIES    = "12"
         HEALTH_INTERVAL   = "10"
 
@@ -23,6 +23,8 @@ pipeline {
         DOCKER_HUB_CRED   = "dockerhub"
         DB_URL_CRED       = "DATABASE_URL"
         JWT_SECRET_CRED   = "JWT_SECRET"
+        NEXTAUTH_SECRET_CRED = "NEXTAUTH_SECRET"
+        NEXTAUTH_URL_CRED    = "NEXTAUTH_URL"
     }
 
     options {
@@ -231,7 +233,9 @@ pipeline {
             steps {
                 withCredentials([
                     string(credentialsId: "${DB_URL_CRED}", variable: "DATABASE_URL"),
-                    string(credentialsId: "${JWT_SECRET_CRED}", variable: "JWT_SECRET")
+                    string(credentialsId: "${JWT_SECRET_CRED}", variable: "JWT_SECRET"),
+                    string(credentialsId: "${NEXTAUTH_SECRET_CRED}", variable: "NEXTAUTH_SECRET"),
+                    string(credentialsId: "${NEXTAUTH_URL_CRED}", variable: "NEXTAUTH_URL")
                 ]) {
                     script {
                         sh "mkdir -p ${DEPLOY_DIR}"
@@ -250,6 +254,8 @@ pipeline {
                             text: """
                                 DATABASE_URL=${DATABASE_URL}
                                 JWT_SECRET=${JWT_SECRET}
+                                NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+                                NEXTAUTH_URL=${NEXTAUTH_URL}
                             """.stripIndent()
                         )
 
@@ -384,8 +390,8 @@ services:
       POSTGRES_USER: \${DB_USER:-devops}
       POSTGRES_PASSWORD: \${DB_PASS:-devops_password}
       POSTGRES_DB: \${DB_NAME:-devops_dashboard}
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -408,7 +414,7 @@ services:
       postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://nginx/api/health"]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
