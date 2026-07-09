@@ -32,7 +32,7 @@ FAIL_COUNT=0
 WARN_COUNT=0
 
 pass() { PASS_COUNT=$((PASS_COUNT+1)); printf "${GREEN}✓${NC} %s\n" "$1"; }
-fail() { FAIL_COUNT=$((FAIL_COUNT+1)); printf "${RED}✗${NC} %s\n" "$1"; [ "${2:-}" = "fatal" ] && { echo; echo "${RED}Aborting.${NC} Fix the above and re-run."; exit 1; }; }
+fail() { FAIL_COUNT=$((FAIL_COUNT+1)); printf "${RED}✗${NC} %s\n" "$1"; [ "${2:-}" = "fatal" ] && { printf "\n${RED}Aborting.${NC} Fix the above and re-run.\n"; exit 1; }; }
 warn() { WARN_COUNT=$((WARN_COUNT+1)); printf "${YELLOW}!${NC} %s\n" "$1"; }
 info() { printf "${BLUE}»${NC} %s\n" "$1"; }
 section() { echo; printf "${BLUE}━━━ %s ━━━${NC}\n" "$1"; }

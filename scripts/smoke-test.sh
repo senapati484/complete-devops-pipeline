@@ -111,7 +111,7 @@ echo "════════════════════════�
 echo
 
 if [ "$FAIL" -gt 0 ]; then
-    echo "${RED}✗ Smoke test FAILED.${NC} The deploy is not healthy."
+    printf "${RED}✗ Smoke test FAILED.${NC} The deploy is not healthy.\n"
     echo "  Diagnostic commands:"
     echo "    docker ps -a"
     echo "    docker logs devops-app --tail 50"
@@ -120,6 +120,6 @@ if [ "$FAIL" -gt 0 ]; then
     exit 1
 fi
 
-echo "${GREEN}✓ All smoke tests passed.${NC} The deployment is live and serving real traffic."
+printf "${GREEN}✓ All smoke tests passed.${NC} The deployment is live and serving real traffic.\n"
 echo "  Open: http://$PUBLIC_IP/"
 exit 0
