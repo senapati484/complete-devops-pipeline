@@ -3,27 +3,27 @@ pipeline {
 
     environment {
         // --- Docker Hub Configuration ---
-        DOCKER_USERNAME  = "senapati484"
-        IMAGE_NAME       = "devops-control-center"
-        IMAGE_TAG        = "${env.BUILD_ID}"
-        FULL_IMAGE       = "${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+        DOCKER_USERNAME   = "senapati484"
+        IMAGE_NAME        = "devops-control-center"
+        IMAGE_TAG         = "${env.BUILD_ID}"
+        FULL_IMAGE        = "${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
         FULL_IMAGE_LATEST = "${DOCKER_USERNAME}/${IMAGE_NAME}:latest"
 
         // --- Node & Build ---
-        NODE_VERSION     = "22"
+        NODE_VERSION      = "22"
 
         // --- Deployment ---
-        COMPOSE_PROJECT  = "devops-control-center"
-        DEPLOY_DIR       = "/home/ubuntu/deployments/${IMAGE_NAME}"
-        APP_CONTAINER    = "devops-app"
-        HEALTH_URL       = "http://localhost:3000/api/health"
-        HEALTH_RETRIES   = "12"
-        HEALTH_INTERVAL  = "10"
+        COMPOSE_PROJECT   = "devops-control-center"
+        DEPLOY_DIR        = "/home/ubuntu/deployments/${IMAGE_NAME}"
+        HEALTH_URL        = "http://localhost:3000/api/health"
+        HEALTH_RETRIES    = "12"
+        HEALTH_INTERVAL   = "10"
 
         // --- Credential IDs (configure in Jenkins → Manage Credentials) ---
         DOCKER_HUB_CRED   = "dockerhub"
         DB_URL_CRED       = "DATABASE_URL"
         JWT_SECRET_CRED   = "JWT_SECRET"
+        GITHUB_CRED       = "github"
     }
 
     options {
@@ -69,7 +69,25 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 2. SETUP NODE
+        // 2. PRE-FLIGHT CHECKS
+        //     Fail fast if required tooling is missing.
+        // ──────────────────────────────────────────────
+        stage("Pre-flight Checks") {
+            steps {
+                sh """
+                    echo "=== Tool Versions ==="
+                    docker --version
+                    docker compose version
+                    git --version
+                    node --version
+                    npm --version
+                    echo "=== All tools available ==="
+                """
+            }
+        }
+
+        // ──────────────────────────────────────────────
+        // 3. SETUP NODE
         // ──────────────────────────────────────────────
         stage("Setup Node") {
             steps {
@@ -80,13 +98,12 @@ pipeline {
                     } catch (Exception e) {
                         echo "NodeJS tool not configured in Jenkins; using system Node.js"
                     }
-                    sh "node --version && npm --version"
                 }
             }
         }
 
         // ──────────────────────────────────────────────
-        // 3. INSTALL DEPENDENCIES
+        // 4. INSTALL DEPENDENCIES
         // ──────────────────────────────────────────────
         stage("Install Dependencies") {
             steps {
@@ -100,7 +117,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 4. LINT
+        // 5. LINT
         // ──────────────────────────────────────────────
         stage("Lint") {
             steps {
@@ -110,7 +127,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 5. TYPE CHECK
+        // 6. TYPE CHECK
         // ──────────────────────────────────────────────
         stage("TypeScript Check") {
             steps {
@@ -120,7 +137,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 6. PRISMA GENERATE (client only — no DB needed)
+        // 7. PRISMA GENERATE (client only — no DB needed)
         // ──────────────────────────────────────────────
         stage("Prisma Generate") {
             steps {
@@ -130,7 +147,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 7. BUILD NEXT.JS
+        // 8. BUILD NEXT.JS
         // ──────────────────────────────────────────────
         stage("Build") {
             steps {
@@ -145,7 +162,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 8. BUILD DOCKER IMAGE
+        // 9. BUILD DOCKER IMAGE
         // ──────────────────────────────────────────────
         stage("Build Docker Image") {
             steps {
@@ -180,7 +197,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 9. LOGIN TO DOCKER HUB
+        // 10. LOGIN TO DOCKER HUB
         // ──────────────────────────────────────────────
         stage("Docker Hub Login") {
             steps {
@@ -197,7 +214,7 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 10. PUSH IMAGE TO DOCKER HUB
+        // 11. PUSH IMAGE TO DOCKER HUB
         // ──────────────────────────────────────────────
         stage("Push Docker Image") {
             steps {
@@ -207,9 +224,11 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // 11. DEPLOY WITH DOCKER COMPOSE
-        //     (requires DATABASE_URL, JWT_SECRET in Jenkins
-        //      Credentials with those exact IDs)
+        // 12. DEPLOY WITH DOCKER COMPOSE
+        //     Uses `pull + up` instead of `down + up` to
+        //     avoid restarting PostgreSQL unnecessarily.
+        //     Prisma migrations run via docker-entrypoint.sh
+        //     on container start — no separate stage needed.
         // ──────────────────────────────────────────────
         stage("Deploy") {
             steps {
@@ -237,30 +256,11 @@ pipeline {
                             """.stripIndent()
                         )
 
-                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml down --remove-orphans || true"
-                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
-                    }
-                }
-            }
-        }
+                        // Pull the new image first
+                        sh "docker pull ${FULL_IMAGE}"
 
-        // ──────────────────────────────────────────────
-        // 12. RUN DB MIGRATIONS
-        //     (PostgreSQL is now live inside the compose stack)
-        // ──────────────────────────────────────────────
-        stage("DB Migration") {
-            steps {
-                withCredentials([
-                    string(credentialsId: "${DB_URL_CRED}", variable: "DATABASE_URL")
-                ]) {
-                    script {
-                        echo "Waiting for PostgreSQL to be ready ..."
-                        sleep(time: 15, unit: "SECONDS")
-
-                        sh """
-                            docker exec ${APP_CONTAINER} \\
-                                sh -c "export DATABASE_URL='${DATABASE_URL}' && npx prisma db push --accept-data-loss --skip-generate"
-                        """
+                        // Recreate only changed containers (Postgres stays up)
+                        sh "docker compose -p ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans --pull missing"
                     }
                 }
             }
