@@ -101,12 +101,38 @@ pipeline {
         stage("Setup Node") {
             steps {
                 script {
+                    // Try the Jenkins-managed NodeJS tool first (configure one in
+                    // Manage Jenkins → Tools if you want a specific version).
+                    // Fall back to a system node, and if neither exists, install
+                    // nodejs via apt so the build is self-healing on a fresh
+                    // jenkins/jenkins image.
                     try {
                         env.NODEJS_HOME = tool name: "NodeJS ${NODE_VERSION}", type: "nodejs"
                         env.PATH = "${env.NODEJS_HOME}/bin:${env.PATH}"
                     } catch (Exception e) {
-                        echo "NodeJS tool not configured in Jenkins; using system Node.js"
+                        echo "NodeJS tool not configured in Jenkins; checking for system node ..."
                     }
+
+                    if (!fileExists("/usr/bin/node") && !sh(script: "command -v node", returnStatus: true).equals(0)) {
+                        echo "node not found; installing via apt (Debian/Ubuntu jenkins image) ..."
+                        sh """
+                            if command -v apt-get >/dev/null 2>&1; then
+                                apt-get update -qq
+                                apt-get install -y -qq --no-install-recommends nodejs npm
+                                rm -rf /var/lib/apt/lists/*
+                            elif command -v yum >/dev/null 2>&1; then
+                                yum install -y -q nodejs npm
+                            elif command -v dnf >/dev/null 2>&1; then
+                                dnf install -y -q nodejs npm
+                            else
+                                echo "No supported package manager found; cannot install node"
+                                exit 1
+                            fi
+                        """
+                    }
+
+                    sh "node --version"
+                    sh "npm --version"
                 }
             }
         }
