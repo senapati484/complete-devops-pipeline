@@ -15,7 +15,7 @@ pipeline {
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
         DEPLOY_DIR        = "/home/ubuntu/deployments/${IMAGE_NAME}"
-        HEALTH_URL        = "http://localhost:3000/api/health"
+        HEALTH_URL        = "http://localhost/api/health"
         HEALTH_RETRIES    = "12"
         HEALTH_INTERVAL   = "10"
 
@@ -35,6 +35,7 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: "10"))
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
+        timeout(time: 30, unit: "MINUTES")
     }
 
     parameters {
@@ -391,6 +392,8 @@ pipeline {
                 echo "Cleaning up workspace ..."
                 cleanWs()
 
+                sh "docker logout || true"
+
                 sh """
                     docker images ${DOCKER_USERNAME}/${IMAGE_NAME} \\
                         --format "{{.CreatedAt}}\\t{{.Repository}}:{{.Tag}}" \\
@@ -418,6 +421,8 @@ services:
     image: postgres:16-alpine
     container_name: devops-postgres
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       POSTGRES_USER: \${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: \${POSTGRES_PASSWORD}
