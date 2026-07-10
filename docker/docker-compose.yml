@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
+      # DEV ONLY — change this in production via .env / Jenkins credentials
       POSTGRES_PASSWORD: senapati484
       POSTGRES_DB: devops_dashboard
     expose:
