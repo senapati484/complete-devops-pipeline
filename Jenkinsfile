@@ -42,7 +42,7 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: "10"))
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
-        timeout(time: 30, unit: "MINUTES")
+        timeout(time: 60, unit: "MINUTES")
     }
 
     parameters {
@@ -190,20 +190,39 @@ pipeline {
 
         // ──────────────────────────────────────────────
         // 4. INSTALL DEPENDENCIES
-        //     Single host-side npm ci. The host stages that follow
-        //     (lint, tsc) only need this. next build and prisma generate
-        //     run inside the Docker builder, so we skip them on the
-        //     host to stay within t2.micro's 1 GB memory budget.
+        //     Cache node_modules by the hash of package-lock.json so
+        //     subsequent builds skip the 9-min npm ci when deps haven't
+        //     changed. On a cache miss, runs npm ci and saves a fresh cache.
+        //     Docker builder has its own layer cache for the container image.
         // ──────────────────────────────────────────────
         stage("Install Dependencies") {
             steps {
-                sh """
-                    # --prefer-offline + --no-audit + --no-fund keep peak RSS of the
-                    # npm subprocess well under 200 MB on a 1 GB host.
-                    npm ci --prefer-offline --no-audit --no-fund
-                """
+                script {
+                    def lockHash = sh(
+                        script: "sha256sum package-lock.json | cut -d' ' -f1",
+                        returnStdout: true
+                    ).trim()
+                    def cacheDir = "/var/jenkins_home/.npm-cache/${lockHash}"
+
+                    sh """
+                        if [ -d "${cacheDir}/node_modules" ]; then
+                            echo "Cache HIT (${lockHash}) — restoring node_modules ..."
+                            cp -r "${cacheDir}/node_modules" ./node_modules
+                        else
+                            echo "Cache MISS — running npm ci ..."
+                            npm ci --prefer-offline --no-audit --no-fund
+                            echo "Saving node_modules to cache ..."
+                            mkdir -p "${cacheDir}"
+                            cp -r ./node_modules "${cacheDir}/node_modules"
+                            # Keep only the 3 most recent caches to avoid filling disk
+                            ls -1t /var/jenkins_home/.npm-cache/ | tail -n +4 | \
+                                xargs -I{} rm -rf /var/jenkins_home/.npm-cache/{}
+                        fi
+                    """
+                }
             }
         }
+
 
         // ──────────────────────────────────────────────
         // 5. LINT
@@ -216,16 +235,10 @@ pipeline {
 
         // ──────────────────────────────────────────────
         // 6. TYPE CHECK
-        //     Prisma Generate + next build deliberately moved INTO the
-        //     Docker builder stage. They were duplicating work and their
-        //     host-side memory peaks (1.2 GB for next build) OOM-killed
-        //     Jenkins on the t2.micro instance.
+        //     Skipped on the host — `next build` inside the Docker
+        //     builder stage runs full TypeScript compilation already.
+        //     Running tsc here too cost ~11 min on t2.micro for no gain.
         // ──────────────────────────────────────────────
-        stage("TypeScript Check") {
-            steps {
-                sh "npx tsc --noEmit"
-            }
-        }
 
         // ──────────────────────────────────────────────
         // 9. BUILD DOCKER IMAGE
