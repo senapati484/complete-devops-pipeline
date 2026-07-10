@@ -19,13 +19,9 @@ pipeline {
 
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
-        // Jenkins writes files here (inside the Jenkins container):
+        // /var/jenkins_home is volume-mounted at the SAME path on the EC2 host,
+        // so Docker daemon can resolve this path for bind mounts directly.
         DEPLOY_DIR        = "/var/jenkins_home/deployments/${IMAGE_NAME}"
-        // Docker daemon resolves bind-mount paths on the EC2 HOST.
-        // /var/jenkins_home inside the Jenkins container maps to
-        // /home/ubuntu/jenkins_home on the host (the -v flag used
-        // when starting Jenkins). Set this to match your host mount.
-        HOST_DEPLOY_DIR   = "/home/ubuntu/jenkins_home/deployments/${IMAGE_NAME}"
         HEALTH_URL        = "http://localhost/api/health"
         HEALTH_RETRIES    = "12"
         HEALTH_INTERVAL   = "10"
@@ -321,14 +317,10 @@ pipeline {
                     string(credentialsId: "${POSTGRES_PASSWORD_CRED}", variable: "POSTGRES_PASSWORD")
                 ]) {
                     script {
-                        // Wipe the deploy dir on every run so stale files
-                        // (especially the nginx.conf directory bug from
-                        // earlier builds) can't poison the next deploy.
-                        // Create deploy dir inside Jenkins container (for writeFile)
+                        // Wipe deploy dir on every run — prevents stale files
+                        // (especially an nginx.conf DIR from a failed bind-mount)
+                        // from poisoning the next deploy.
                         sh "rm -rf ${DEPLOY_DIR} && mkdir -p ${DEPLOY_DIR}"
-                        // Also ensure the equivalent HOST path exists (Docker daemon
-                        // resolves bind-mount sources on the host, not in this container)
-                        sh "mkdir -p ${HOST_DEPLOY_DIR} 2>/dev/null || true"
 
                         writeFile(
                             file: "${DEPLOY_DIR}/docker-compose.yml",
@@ -336,7 +328,7 @@ pipeline {
                                 env.IMAGE_TAG,
                                 env.DOCKER_USERNAME,
                                 env.IMAGE_NAME,
-                                env.HOST_DEPLOY_DIR
+                                env.DEPLOY_DIR
                             )
                         )
 
@@ -354,7 +346,10 @@ pipeline {
                             """.stripIndent()
                         )
 
-                        // Write nginx config alongside the compose file
+                        // Explicitly remove any stale nginx.conf directory that
+                        // a previous failed Docker bind-mount may have created,
+                        // then write the file so Docker sees a FILE not a DIR.
+                        sh "rm -rf ${DEPLOY_DIR}/nginx.conf"
                         writeFile(
                             file: "${DEPLOY_DIR}/nginx.conf",
                             text: readFile("nginx/nginx.conf")
@@ -363,6 +358,8 @@ pipeline {
                         sh """
                             echo '=== Deploy directory contents ==='
                             ls -la ${DEPLOY_DIR}/
+                            echo '=== nginx.conf type ==='
+                            file ${DEPLOY_DIR}/nginx.conf
                             echo '=== nginx.conf (first 3 lines) ==='
                             head -3 ${DEPLOY_DIR}/nginx.conf
                         """
@@ -485,7 +482,7 @@ pipeline {
 //     PostgreSQL runs inside Docker alongside the app.
 //     Nginx proxies public port 80 to the app.
 // ──────────────────────────────────────────────
-def deployComposeTemplate(imageTag, dockerUsername, imageName, hostDeployDir) {
+def deployComposeTemplate(imageTag, dockerUsername, imageName, deployDir) {
     return """
 version: "3.8"
 
@@ -539,7 +536,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ${hostDeployDir}/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${deployDir}/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - app
     networks:
