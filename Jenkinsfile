@@ -19,7 +19,7 @@ pipeline {
 
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
-        DEPLOY_DIR        = "/home/ubuntu/deployments/${IMAGE_NAME}"
+        DEPLOY_DIR        = "/var/jenkins_home/deployments/${IMAGE_NAME}"
         HEALTH_URL        = "http://localhost/api/health"
         HEALTH_RETRIES    = "12"
         HEALTH_INTERVAL   = "10"
