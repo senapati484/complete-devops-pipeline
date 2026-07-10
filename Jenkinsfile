@@ -484,8 +484,6 @@ pipeline {
 // ──────────────────────────────────────────────
 def deployComposeTemplate(imageTag, dockerUsername, imageName, deployDir) {
     return """
-version: "3.8"
-
 services:
   postgres:
     image: postgres:16-alpine
