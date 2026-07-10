@@ -351,6 +351,22 @@ pipeline {
                             text: readFile("nginx/nginx.conf")
                         )
 
+                        // DIAGNOSTIC: confirm what was actually written.
+                        // The 'cp' / 'writeFile' step has been silently creating
+                        // a directory at this path in previous builds, so
+                        // verify here what the kernel sees before docker compose
+                        // tries to bind-mount it.
+                        sh """
+                            echo '=== DEPLOY_DIR contents ==='
+                            ls -la ${DEPLOY_DIR}/
+                            echo '=== nginx.conf type ==='
+                            file ${DEPLOY_DIR}/nginx.conf 2>&1 || true
+                            echo '=== nginx.conf size ==='
+                            stat -c '%n: %s bytes (type=%F)' ${DEPLOY_DIR}/nginx.conf 2>&1 || true
+                            echo '=== readFile result preview ==='
+                            head -3 ${DEPLOY_DIR}/nginx.conf 2>&1 || true
+                        """
+
                         sh "docker pull ${FULL_IMAGE}"
                         sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml pull"
                         sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
