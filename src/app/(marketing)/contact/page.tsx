@@ -36,7 +36,7 @@ function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: 
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.5, delay }}
+      transition={{ duration: 0.5, delay, ease: "easeOut" }}
     >
       {children}
     </motion.div>
@@ -51,7 +51,6 @@ export default function ContactPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSending(true)
-    // Simulate sending
     await new Promise((r) => setTimeout(r, 1000))
     toast({ title: "Message sent!", description: "We'll get back to you soon.", variant: "success" })
     setFormData({ name: "", email: "", subject: "", message: "" })
@@ -59,35 +58,43 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="px-4 py-24">
+    <div className="px-4 py-28 grid-bg min-h-screen relative overflow-hidden">
+      {/* Glow overlays */}
+      <div className="absolute top-[10%] left-[10%] -z-10 h-[500px] w-[500px] rounded-full bg-primary/5 blur-[100px]" />
+      <div className="absolute bottom-[10%] right-[10%] -z-10 h-[500px] w-[500px] rounded-full bg-indigo-500/5 blur-[100px]" />
+
       <div className="mx-auto max-w-7xl">
         <FadeInUp>
-          <div className="text-center">
-            <h1 className="text-4xl font-bold sm:text-5xl">Get in Touch</h1>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Have a question, feedback, or want to learn more? We&apos;d love to hear from you.
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
+              Contact Us
+            </div>
+            <h1 className="text-4xl font-extrabold sm:text-5xl tracking-tight">Get in Touch</h1>
+            <p className="text-xs text-muted-foreground leading-relaxed md:text-sm">
+              Have a question, feedback, or want to discuss enterprise integrations? Contact our DevOps team.
             </p>
           </div>
         </FadeInUp>
 
-        <div className="mt-16 grid gap-12 lg:grid-cols-2">
+        <div className="mt-20 grid gap-12 lg:grid-cols-2 items-start">
           {/* Form */}
           <FadeInUp delay={0.1}>
-            <Card>
+            <Card className="border-border/40 bg-card/35 backdrop-blur-md shadow-lg">
               <CardContent className="p-6 sm:p-8">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="name" className="text-xs font-semibold">Name</Label>
                     <Input
                       id="name"
                       placeholder="Your name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
+                      className="glass-input h-10 text-xs"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email" className="text-xs font-semibold">Email</Label>
                     <Input
                       id="email"
                       type="email"
@@ -95,37 +102,39 @@ export default function ContactPage() {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
+                      className="glass-input h-10 text-xs"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Subject</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="subject" className="text-xs font-semibold">Subject</Label>
                     <Input
                       id="subject"
                       placeholder="How can we help?"
                       value={formData.subject}
                       onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
                       required
+                      className="glass-input h-10 text-xs"
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="message">Message</Label>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="message" className="text-xs font-semibold">Message</Label>
                     <textarea
                       id="message"
                       rows={5}
-                      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Tell us more..."
+                      className="flex w-full rounded-lg border border-border/40 bg-background/50 glass-input px-3 py-2 text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Tell us more about your infrastructure requirements..."
                       value={formData.message}
                       onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={sending}>
+                  <Button type="submit" className="w-full rounded-full text-xs font-bold h-10" disabled={sending}>
                     {sending ? (
                       "Sending..."
                     ) : (
                       <>
                         Send Message
-                        <Send className="ml-2 h-4 w-4" />
+                        <Send className="ml-1.5 h-3.5 w-3.5" />
                       </>
                     )}
                   </Button>
@@ -136,21 +145,21 @@ export default function ContactPage() {
 
           {/* Contact Info */}
           <FadeInUp delay={0.2}>
-            <div className="space-y-8">
+            <div className="space-y-6">
               {contactInfo.map((info) => {
                 const Icon = info.icon
                 return (
                   <a
                     key={info.label}
                     href={info.href}
-                    className="flex items-start gap-4 rounded-lg border bg-card p-6 transition-shadow hover:shadow-md"
+                    className="flex items-start gap-4 rounded-2xl border border-border/40 bg-card/35 p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md hover:border-primary/20 group"
                   >
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="h-6 w-6" />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/5 text-primary border border-primary/10 transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+                      <Icon className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="font-semibold">{info.label}</h3>
-                      <p className="mt-1 text-sm text-muted-foreground">{info.value}</p>
+                      <h3 className="font-bold text-sm tracking-tight">{info.label}</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">{info.value}</p>
                     </div>
                   </a>
                 )

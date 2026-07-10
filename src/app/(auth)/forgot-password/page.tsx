@@ -33,22 +33,22 @@ export default function ForgotPasswordPage() {
 
   if (sent) {
     return (
-      <Card>
-        <CardHeader className="text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <CheckCircle className="h-6 w-6 text-primary" />
+      <Card className="border-border/40 bg-card/40 backdrop-blur-md shadow-xl">
+        <CardHeader className="text-center space-y-2">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+            <CheckCircle className="h-5 w-5" />
           </div>
-          <CardTitle className="mt-4 text-2xl">Check your email</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-2xl font-bold tracking-tight">Check your email</CardTitle>
+          <CardDescription className="text-xs">
             We&apos;ve sent a password reset link to <strong>{email}</strong>.
           </CardDescription>
         </CardHeader>
-        <CardFooter className="justify-center">
+        <CardFooter className="justify-center border-t border-border/40 pt-4 mt-2">
           <Link
             href="/login"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
+            className="flex items-center gap-2 text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
           >
-            <ArrowLeft className="h-4 w-4" />
+            <ArrowLeft className="h-3.5 w-3.5" />
             Back to sign in
           </Link>
         </CardFooter>
@@ -57,44 +57,44 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-          <Activity className="h-6 w-6 text-primary" />
+    <Card className="border-border/40 bg-card/40 backdrop-blur-md shadow-xl">
+      <CardHeader className="text-center space-y-2">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-primary/5 text-primary border border-primary/10 animate-pulse-glow">
+          <Activity className="h-5 w-5" />
         </div>
-        <CardTitle className="mt-4 text-2xl">Forgot password?</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-2xl font-bold tracking-tight">Forgot password?</CardTitle>
+        <CardDescription className="text-xs">
           Enter your email and we&apos;ll send you a reset link.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-xs font-semibold">Email address</Label>
             <div className="relative">
-              <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Mail className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
               <Input
                 id="email"
                 type="email"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="pl-10"
+                className="pl-10 glass-input h-10 text-xs"
                 required
               />
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full rounded-full text-xs font-bold h-10 pt-0.5" disabled={loading}>
             {loading ? "Sending..." : "Send Reset Link"}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="justify-center">
+      <CardFooter className="justify-center border-t border-border/40 pt-4 mt-2">
         <Link
           href="/login"
-          className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"
+          className="flex items-center gap-2 text-xs font-bold text-muted-foreground hover:text-primary transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
           Back to sign in
         </Link>
       </CardFooter>

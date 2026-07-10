@@ -14,6 +14,7 @@ import {
   Cloud,
   Zap,
   RefreshCw,
+  CheckCircle2
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 
@@ -98,7 +99,7 @@ function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: 
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.5, delay }}
+      transition={{ duration: 0.5, delay, ease: "easeOut" }}
     >
       {children}
     </motion.div>
@@ -107,42 +108,51 @@ function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: 
 
 export default function FeaturesPage() {
   return (
-    <div className="px-4 py-24">
+    <div className="px-4 py-28 grid-bg relative min-h-screen">
+      <div className="absolute top-[10%] left-[-10%] -z-10 h-[400px] w-[400px] rounded-full bg-primary/5 blur-[80px]" />
+      <div className="absolute bottom-[20%] right-[-10%] -z-10 h-[400px] w-[400px] rounded-full bg-indigo-500/5 blur-[80px]" />
+
       <div className="mx-auto max-w-7xl">
         <FadeInUp>
-          <div className="text-center">
-            <h1 className="text-4xl font-bold sm:text-5xl">Features</h1>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Everything you need to manage your DevOps pipeline, from monitoring to deployment.
+          <div className="text-center space-y-4 max-w-3xl mx-auto">
+            <div className="inline-flex items-center gap-1 bg-primary/5 border border-primary/15 rounded-full px-3 py-1 text-xs font-semibold text-primary">
+              Feature Deep Dive
+            </div>
+            <h1 className="text-4xl font-extrabold sm:text-5xl tracking-tight leading-none">
+              Explore Our Capabilities
+            </h1>
+            <p className="text-xs text-muted-foreground leading-relaxed md:text-sm">
+              Everything you need to orchestrate complex cloud infrastructure, secure environment secrets, and deploy with confidence.
             </p>
           </div>
         </FadeInUp>
 
-        <div className="mt-20 space-y-24">
+        <div className="mt-24 space-y-28">
           {features.map((feature, i) => {
             const Icon = feature.icon
             return (
               <FadeInUp key={feature.title} delay={0.1}>
-                <div className={`flex flex-col gap-8 lg:flex-row ${i % 2 === 1 ? "lg:flex-row-reverse" : ""}`}>
-                  <div className="flex-1">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                      <Icon className="h-7 w-7" />
+                <div className={`flex flex-col gap-12 lg:flex-row items-center ${i % 2 === 1 ? "lg:flex-row-reverse" : ""}`}>
+                  <div className="flex-1 space-y-6">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/5 text-primary border border-primary/20 shadow-sm animate-pulse-glow">
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <h2 className="mt-6 text-2xl font-bold">{feature.title}</h2>
-                    <p className="mt-3 text-muted-foreground leading-relaxed">{feature.description}</p>
-                    <ul className="mt-6 space-y-2">
+                    <h2 className="text-2xl font-bold tracking-tight">{feature.title}</h2>
+                    <p className="text-xs text-muted-foreground leading-relaxed md:text-sm">{feature.description}</p>
+                    <ul className="grid gap-2 sm:grid-cols-2 pt-2">
                       {feature.details.map((detail) => (
-                        <li key={detail} className="flex items-center gap-2 text-sm">
-                          <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          {detail}
+                        <li key={detail} className="flex items-center gap-2 text-xs text-foreground/80">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                          <span>{detail}</span>
                         </li>
                       ))}
                     </ul>
                   </div>
-                  <div className="flex-1">
-                    <Card className="h-full">
-                      <CardContent className="flex h-full items-center justify-center p-12">
-                        <Icon className="h-32 w-32 text-primary/20" />
+                  <div className="flex-1 w-full">
+                    <Card className="border-border/40 bg-card/30 backdrop-blur-md overflow-hidden relative group">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-primary/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      <CardContent className="flex h-64 items-center justify-center p-12 relative">
+                        <Icon className="h-28 w-28 text-primary/10 transition-transform duration-300 group-hover:scale-110 group-hover:text-primary/20" />
                       </CardContent>
                     </Card>
                   </div>

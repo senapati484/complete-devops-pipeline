@@ -62,33 +62,34 @@ export default function RegisterPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-          <Activity className="h-6 w-6 text-primary" />
+    <Card className="border-border/40 bg-card/40 backdrop-blur-md shadow-xl">
+      <CardHeader className="text-center space-y-2">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-primary/5 text-primary border border-primary/10 animate-pulse-glow">
+          <Activity className="h-5 w-5" />
         </div>
-        <CardTitle className="mt-4 text-2xl">Create an account</CardTitle>
-        <CardDescription>Get started with DevOps Control Center.</CardDescription>
+        <CardTitle className="text-2xl font-bold tracking-tight">Create an account</CardTitle>
+        <CardDescription className="text-xs">Get started with DevOps Control Center.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive font-medium border border-destructive/20">
               {error}
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="name" className="text-xs font-semibold">Name</Label>
             <Input
               id="name"
               placeholder="Your name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
+              className="glass-input h-10 text-xs"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-xs font-semibold">Email address</Label>
             <Input
               id="email"
               type="email"
@@ -97,10 +98,11 @@ export default function RegisterPage() {
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
               autoComplete="email"
+              className="glass-input h-10 text-xs"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-xs font-semibold">Password</Label>
             <Input
               id="password"
               type="password"
@@ -110,10 +112,11 @@ export default function RegisterPage() {
               required
               minLength={8}
               autoComplete="new-password"
+              className="glass-input h-10 text-xs"
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="confirmPassword">Confirm Password</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="confirmPassword" className="text-xs font-semibold">Confirm Password</Label>
             <Input
               id="confirmPassword"
               type="password"
@@ -122,23 +125,24 @@ export default function RegisterPage() {
               onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
               required
               autoComplete="new-password"
+              className="glass-input h-10 text-xs"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full rounded-full text-xs font-bold h-10 pt-0.5" disabled={loading}>
             {loading ? (
               "Creating account..."
             ) : (
               <>
                 Create Account
-                <UserPlus className="ml-2 h-4 w-4" />
+                <UserPlus className="ml-1.5 h-3.5 w-3.5" />
               </>
             )}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="justify-center text-sm text-muted-foreground">
+      <CardFooter className="justify-center text-xs text-muted-foreground border-t border-border/40 pt-4 mt-2">
         Already have an account?{" "}
-        <Link href="/login" className="ml-1 font-medium text-primary hover:underline">
+        <Link href="/login" className="ml-1 font-bold text-primary hover:underline">
           Sign in
         </Link>
       </CardFooter>

@@ -44,7 +44,7 @@ const tiers = [
       { text: "SSO & SAML", included: false },
       { text: "24/7 phone support", included: false },
     ],
-    cta: "Start Trial",
+    cta: "Start Free Trial",
     href: "/register",
     highlighted: true,
   },
@@ -76,7 +76,8 @@ function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: 
       initial={{ opacity: 0, y: 30 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
-      transition={{ duration: 0.5, delay }}
+      transition={{ duration: 0.5, delay, ease: "easeOut" }}
+      className="h-full"
     >
       {children}
     </motion.div>
@@ -85,52 +86,59 @@ function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: 
 
 export default function PricingPage() {
   return (
-    <div className="px-4 py-24">
+    <div className="px-4 py-28 grid-bg min-h-screen relative overflow-hidden">
+      {/* Decorative Glow Elements */}
+      <div className="absolute top-[10%] left-[20%] -z-10 h-[500px] w-[500px] rounded-full bg-primary/5 blur-[100px]" />
+      <div className="absolute bottom-[10%] right-[10%] -z-10 h-[500px] w-[500px] rounded-full bg-indigo-500/5 blur-[100px]" />
+
       <div className="mx-auto max-w-7xl">
         <FadeInUp>
-          <div className="text-center">
-            <h1 className="text-4xl font-bold sm:text-5xl">Simple, transparent pricing</h1>
-            <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-              Choose the plan that fits your team. No hidden fees, no surprises.
+          <div className="text-center space-y-4 max-w-2xl mx-auto">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary">
+              Pricing Options
+            </div>
+            <h1 className="text-4xl font-extrabold sm:text-5xl tracking-tight">Simple, Transparent Plans</h1>
+            <p className="text-xs text-muted-foreground leading-relaxed md:text-sm">
+              Choose the plan that fits your pipeline frequency. Cancel or change plans anytime.
             </p>
           </div>
         </FadeInUp>
 
-        <div className="mt-16 grid gap-8 lg:grid-cols-3">
+        <div className="mt-20 grid gap-8 lg:grid-cols-3 items-stretch">
           {tiers.map((tier, i) => (
             <FadeInUp key={tier.name} delay={i * 0.15}>
               <Card
                 className={cn(
-                  "relative flex flex-col",
-                  tier.highlighted && "border-primary shadow-lg shadow-primary/10 scale-105"
+                  "relative flex flex-col h-full border-border/40 bg-card/35 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:shadow-lg",
+                  tier.highlighted && "border-primary bg-card/50 scale-[1.03] shadow-md shadow-primary/5 lg:z-10"
                 )}
               >
                 {tier.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-xs font-medium text-primary-foreground">
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-primary-foreground shadow-sm">
                     Most Popular
                   </div>
                 )}
-                <CardHeader>
-                  <CardTitle className="text-xl">{tier.name}</CardTitle>
-                  <div className="mt-2 flex items-baseline gap-1">
-                    <span className="text-4xl font-bold">{tier.price}</span>
-                    <span className="text-sm text-muted-foreground">{tier.period}</span>
+                <CardHeader className="space-y-1">
+                  <CardTitle className="text-lg font-bold font-heading">{tier.name}</CardTitle>
+                  <div className="flex items-baseline gap-1 pt-2">
+                    <span className="text-4xl font-extrabold tracking-tight">{tier.price}</span>
+                    <span className="text-xs text-muted-foreground">{tier.period}</span>
                   </div>
-                  <CardDescription className="mt-2">{tier.description}</CardDescription>
+                  <CardDescription className="text-xs pt-1.5 leading-relaxed">{tier.description}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1">
+                <CardContent className="flex-1 pt-4">
                   <ul className="space-y-3">
                     {tier.features.map((feature) => (
                       <li key={feature.text} className="flex items-center gap-3">
                         {feature.included ? (
-                          <Check className="h-4 w-4 shrink-0 text-primary" />
+                          <Check className="h-3.5 w-3.5 shrink-0 text-primary" />
                         ) : (
-                          <X className="h-4 w-4 shrink-0 text-muted-foreground/40" />
+                          <X className="h-3.5 w-3.5 shrink-0 text-muted-foreground/30" />
                         )}
                         <span
                           className={cn(
-                            "text-sm",
-                            feature.included ? "text-foreground" : "text-muted-foreground/40"
+                            "text-xs",
+                            feature.included ? "text-foreground" : "text-muted-foreground/30"
                           )}
                         >
                           {feature.text}
@@ -139,10 +147,10 @@ export default function PricingPage() {
                     ))}
                   </ul>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="pt-6">
                   <Link href={tier.href} className="w-full">
                     <Button
-                      className="w-full"
+                      className="w-full rounded-full text-xs font-bold"
                       variant={tier.highlighted ? "default" : "outline"}
                       size="lg"
                     >

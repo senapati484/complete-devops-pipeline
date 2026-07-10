@@ -48,23 +48,23 @@ export default function LoginPage() {
   }
 
   return (
-    <Card>
-      <CardHeader className="text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-          <Activity className="h-6 w-6 text-primary" />
+    <Card className="border-border/40 bg-card/40 backdrop-blur-md shadow-xl">
+      <CardHeader className="text-center space-y-2">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-primary/5 text-primary border border-primary/10 animate-pulse-glow">
+          <Activity className="h-5 w-5" />
         </div>
-        <CardTitle className="mt-4 text-2xl">Welcome back</CardTitle>
-        <CardDescription>Sign in to your DevOps Control Center account.</CardDescription>
+        <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
+        <CardDescription className="text-xs">Sign in to your DevOps Control Center account.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            <div className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive font-medium border border-destructive/20">
               {error}
             </div>
           )}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-xs font-semibold">Email address</Label>
             <Input
               id="email"
               type="email"
@@ -73,14 +73,15 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              className="glass-input h-10 text-xs"
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-xs font-semibold">Password</Label>
               <Link
                 href="/forgot-password"
-                className="text-xs text-muted-foreground hover:text-primary"
+                className="text-[11px] font-semibold text-muted-foreground hover:text-primary transition-colors"
               >
                 Forgot password?
               </Link>
@@ -93,23 +94,24 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              className="glass-input h-10 text-xs"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full rounded-full text-xs font-bold h-10 pt-0.5" disabled={loading}>
             {loading ? (
               "Signing in..."
             ) : (
               <>
                 Sign In
-                <LogIn className="ml-2 h-4 w-4" />
+                <LogIn className="ml-1.5 h-3.5 w-3.5" />
               </>
             )}
           </Button>
         </form>
       </CardContent>
-      <CardFooter className="justify-center text-sm text-muted-foreground">
+      <CardFooter className="justify-center text-xs text-muted-foreground border-t border-border/40 pt-4 mt-2">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="ml-1 font-medium text-primary hover:underline">
+        <Link href="/register" className="ml-1 font-bold text-primary hover:underline">
           Sign up
         </Link>
       </CardFooter>
