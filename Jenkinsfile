@@ -340,8 +340,13 @@ pipeline {
                             """.stripIndent()
                         )
 
-                        // Copy nginx config alongside the compose file
-                        sh "cp nginx/nginx.conf ${DEPLOY_DIR}/nginx.conf"
+                        // Write nginx config alongside the compose file
+                        // (using writeFile + readFile instead of `cp` to avoid
+                        // any working-directory surprises in the workspace)
+                        writeFile(
+                            file: "${DEPLOY_DIR}/nginx.conf",
+                            text: readFile("nginx/nginx.conf")
+                        )
 
                         sh "docker pull ${FULL_IMAGE}"
                         sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml pull"
