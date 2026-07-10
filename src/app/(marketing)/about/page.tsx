@@ -39,12 +39,8 @@ const values = [
 ]
 
 const teamMembers = [
-  { name: "Alex Rivera", role: "CEO & Co-Founder", initials: "AR" },
-  { name: "Jordan Kim", role: "CTO & Co-Founder", initials: "JK" },
-  { name: "Taylor Brooks", role: "Head of Engineering", initials: "TB" },
-  { name: "Morgan Lee", role: "Head of Product", initials: "ML" },
-  { name: "Casey Williams", role: "Head of Design", initials: "CW" },
-  { name: "Riley Thompson", role: "Head of Sales", initials: "RT" },
+  { name: "Sayan Senapati", role: "CEO & CO-FOUNDER & DEV", initials: "SS" },
+  { name: "Shradha Piparah", role: "DEV & MANAGER", initials: "SP" },
 ]
 
 function FadeInUp({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
