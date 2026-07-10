@@ -187,57 +187,15 @@ pipeline {
                 """
             }
         }
-
         // ──────────────────────────────────────────────
-        // 4. INSTALL DEPENDENCIES
-        //     Cache node_modules by the hash of package-lock.json so
-        //     subsequent builds skip the 9-min npm ci when deps haven't
-        //     changed. On a cache miss, runs npm ci and saves a fresh cache.
-        //     Docker builder has its own layer cache for the container image.
-        // ──────────────────────────────────────────────
-        stage("Install Dependencies") {
-            steps {
-                script {
-                    def lockHash = sh(
-                        script: "sha256sum package-lock.json | cut -d' ' -f1",
-                        returnStdout: true
-                    ).trim()
-                    def cacheDir = "/var/jenkins_home/.npm-cache/${lockHash}"
-
-                    sh """
-                        if [ -d "${cacheDir}/node_modules" ]; then
-                            echo "Cache HIT (${lockHash}) — restoring node_modules ..."
-                            cp -r "${cacheDir}/node_modules" ./node_modules
-                        else
-                            echo "Cache MISS — running npm ci ..."
-                            npm ci --prefer-offline --no-audit --no-fund
-                            echo "Saving node_modules to cache ..."
-                            mkdir -p "${cacheDir}"
-                            cp -r ./node_modules "${cacheDir}/node_modules"
-                            # Keep only the 3 most recent caches to avoid filling disk
-                            ls -1t /var/jenkins_home/.npm-cache/ | tail -n +4 | \
-                                xargs -I{} rm -rf /var/jenkins_home/.npm-cache/{}
-                        fi
-                    """
-                }
-            }
-        }
-
-
-        // ──────────────────────────────────────────────
-        // 5. LINT
-        // ──────────────────────────────────────────────
-        stage("Lint") {
-            steps {
-                sh "npm run lint"
-            }
-        }
-
-        // ──────────────────────────────────────────────
-        // 6. TYPE CHECK
-        //     Skipped on the host — `next build` inside the Docker
-        //     builder stage runs full TypeScript compilation already.
-        //     Running tsc here too cost ~11 min on t2.micro for no gain.
+        // 4. INSTALL DEPENDENCIES  (moved into Docker builder)
+        // 5. LINT                  (moved into Docker builder)
+        // 6. TYPE CHECK            (moved into Docker builder via next build)
+        //
+        //     All three run inside the Dockerfile builder stage where
+        //     node_modules are already installed. This keeps the Jenkins
+        //     host (t2.micro, 1 GB RAM) free of Node.js processes so it
+        //     can't OOM or swap-thrash during the Docker build.
         // ──────────────────────────────────────────────
 
         // ──────────────────────────────────────────────

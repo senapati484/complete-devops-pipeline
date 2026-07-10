@@ -11,6 +11,10 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npx prisma generate
+# Lint runs here — inside the builder where node_modules already exist.
+# Fails the Docker build fast if lint errors are found, before the
+# expensive next build step.
+RUN npm run lint
 RUN npm run build
 
 # Stage 3: Runner
