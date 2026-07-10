@@ -19,7 +19,13 @@ pipeline {
 
         // --- Deployment ---
         COMPOSE_PROJECT   = "devops-control-center"
+        // Jenkins writes files here (inside the Jenkins container):
         DEPLOY_DIR        = "/var/jenkins_home/deployments/${IMAGE_NAME}"
+        // Docker daemon resolves bind-mount paths on the EC2 HOST.
+        // /var/jenkins_home inside the Jenkins container maps to
+        // /home/ubuntu/jenkins_home on the host (the -v flag used
+        // when starting Jenkins). Set this to match your host mount.
+        HOST_DEPLOY_DIR   = "/home/ubuntu/jenkins_home/deployments/${IMAGE_NAME}"
         HEALTH_URL        = "http://localhost/api/health"
         HEALTH_RETRIES    = "12"
         HEALTH_INTERVAL   = "10"
@@ -318,14 +324,19 @@ pipeline {
                         // Wipe the deploy dir on every run so stale files
                         // (especially the nginx.conf directory bug from
                         // earlier builds) can't poison the next deploy.
+                        // Create deploy dir inside Jenkins container (for writeFile)
                         sh "rm -rf ${DEPLOY_DIR} && mkdir -p ${DEPLOY_DIR}"
+                        // Also ensure the equivalent HOST path exists (Docker daemon
+                        // resolves bind-mount sources on the host, not in this container)
+                        sh "mkdir -p ${HOST_DEPLOY_DIR} 2>/dev/null || true"
 
                         writeFile(
                             file: "${DEPLOY_DIR}/docker-compose.yml",
                             text: deployComposeTemplate(
                                 env.IMAGE_TAG,
                                 env.DOCKER_USERNAME,
-                                env.IMAGE_NAME
+                                env.IMAGE_NAME,
+                                env.HOST_DEPLOY_DIR
                             )
                         )
 
@@ -344,27 +355,16 @@ pipeline {
                         )
 
                         // Write nginx config alongside the compose file
-                        // (using writeFile + readFile instead of `cp` to avoid
-                        // any working-directory surprises in the workspace)
                         writeFile(
                             file: "${DEPLOY_DIR}/nginx.conf",
                             text: readFile("nginx/nginx.conf")
                         )
 
-                        // DIAGNOSTIC: confirm what was actually written.
-                        // The 'cp' / 'writeFile' step has been silently creating
-                        // a directory at this path in previous builds, so
-                        // verify here what the kernel sees before docker compose
-                        // tries to bind-mount it.
                         sh """
-                            echo '=== DEPLOY_DIR contents ==='
+                            echo '=== Deploy directory contents ==='
                             ls -la ${DEPLOY_DIR}/
-                            echo '=== nginx.conf type ==='
-                            file ${DEPLOY_DIR}/nginx.conf 2>&1 || true
-                            echo '=== nginx.conf size ==='
-                            stat -c '%n: %s bytes (type=%F)' ${DEPLOY_DIR}/nginx.conf 2>&1 || true
-                            echo '=== readFile result preview ==='
-                            head -3 ${DEPLOY_DIR}/nginx.conf 2>&1 || true
+                            echo '=== nginx.conf (first 3 lines) ==='
+                            head -3 ${DEPLOY_DIR}/nginx.conf
                         """
 
                         sh "docker pull ${FULL_IMAGE}"
@@ -485,7 +485,7 @@ pipeline {
 //     PostgreSQL runs inside Docker alongside the app.
 //     Nginx proxies public port 80 to the app.
 // ──────────────────────────────────────────────
-def deployComposeTemplate(imageTag, dockerUsername, imageName) {
+def deployComposeTemplate(imageTag, dockerUsername, imageName, hostDeployDir) {
     return """
 version: "3.8"
 
@@ -539,7 +539,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ${hostDeployDir}/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - app
     networks:
