@@ -4,6 +4,7 @@ import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 import { Sun, Moon } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
+import { useEffect, useState } from "react"
 
 interface ThemeToggleProps {
   className?: string
@@ -11,9 +12,29 @@ interface ThemeToggleProps {
 
 export function ThemeToggle({ className }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme()
-  const isDark = theme === "dark"
+  const [mounted, setMounted] = useState(false)
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const isDark = theme === "dark"
   const toggle = () => setTheme(isDark ? "light" : "dark")
+
+  if (!mounted) {
+    return (
+      <button
+        aria-label="Toggle theme"
+        className={cn(
+          "relative inline-flex h-9 w-9 items-center justify-center rounded-md opacity-50",
+          className
+        )}
+        disabled
+      >
+        <div className="h-5 w-5 rounded-full border-2 border-muted border-t-transparent animate-spin" />
+      </button>
+    )
+  }
 
   return (
     <button
