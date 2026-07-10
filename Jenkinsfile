@@ -315,7 +315,10 @@ pipeline {
                     string(credentialsId: "${POSTGRES_PASSWORD_CRED}", variable: "POSTGRES_PASSWORD")
                 ]) {
                     script {
-                        sh "mkdir -p ${DEPLOY_DIR}"
+                        // Wipe the deploy dir on every run so stale files
+                        // (especially the nginx.conf directory bug from
+                        // earlier builds) can't poison the next deploy.
+                        sh "rm -rf ${DEPLOY_DIR} && mkdir -p ${DEPLOY_DIR}"
 
                         writeFile(
                             file: "${DEPLOY_DIR}/docker-compose.yml",
