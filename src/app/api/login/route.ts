@@ -37,7 +37,11 @@ export async function POST(request: Request) {
 
     response.cookies.set("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      // Use the public URL protocol to decide whether Secure is safe.
+      // NODE_ENV=production is always true in Docker, but the site may still
+      // be served over plain HTTP. A Secure cookie on HTTP is silently
+      // discarded by the browser, which breaks the entire auth flow.
+      secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false,
       sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7,
       path: "/",
