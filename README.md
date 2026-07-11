@@ -1,8 +1,26 @@
-# Complete DevOps Pipeline
+# Complete DevOps Pipeline & Control Center
 
 A production-grade CI/CD pipeline that builds a Next.js application and deploys it to AWS EC2 using Jenkins, Docker, Docker Hub, Nginx, and PostgreSQL.
 
-> **Academic project (B.Tech — AWS + DevOps).** Built to demonstrate industry-style end-to-end automation: every push to GitHub is linted, type-checked, containerized, pushed to a registry, deployed behind a reverse proxy, and gated by a health check.
+> 🎓 **Academic project (B.Tech — AWS + DevOps).** Built to demonstrate industry-style end-to-end automation: every push to GitHub is linted, type-checked, containerized, pushed to a registry, deployed behind a reverse proxy, and gated by a health check.
+
+---
+
+## 🎯 Purpose of the Website (DevOps Control Center)
+While the repository sets up a complete CI/CD pipeline, the deployed application itself is a **DevOps Control Center Dashboard**. It serves as the single pane of glass for engineers to monitor their deployments and infrastructure health. 
+
+Key features demonstrated in the UI:
+1. **Live Health & Metrics:** Visualizes CPU, memory, and storage utilization of the host machine.
+2. **Active Pipeline Stages:** Displays running builds/pipelines with visual stage progress (`SRC` ➜ `BLD` ➜ `TST` ➜ `DEP`).
+3. **Deployment History:** Keeps track of successful and failed deployments, who deployed them, and from which branch.
+4. **Audit Activity Log:** A chronological log tracking user registrations, log-ins, and pipeline status events.
+5. **Real-time Docker Logs:** Renders output from system logs directly on the browser terminal.
+
+---
+
+## 📖 Quick Guides
+* 🚀 **[EC2 Setup Guide (EC2_SETUP.md)](file:///Users/sayansenapati/Desktop/Dev/aws/complete-devops-pipeline/EC2_SETUP.md):** Complete installation instructions for a fresh Ubuntu EC2 instance.
+* 🔄 **[Start & Restart Guide (RESTART.md)](file:///Users/sayansenapati/Desktop/Dev/aws/complete-devops-pipeline/RESTART.md):** How to run, restart, monitor, and reset the containerized application stack.
 
 ---
 
