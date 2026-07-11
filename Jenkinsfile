@@ -239,6 +239,16 @@ pipeline {
                         -t ${FULL_IMAGE_LATEST} \
                         .
                 """
+
+                // Build custom nginx image with nginx.conf baked in.
+                // This permanently eliminates the file bind-mount that caused
+                // "not a directory" errors in Docker-on-Docker environments.
+                sh """
+                    docker build \
+                        -f nginx/Dockerfile \
+                        -t ${DOCKER_USERNAME}/devops-nginx:latest \
+                        nginx/
+                """
             }
         }
 
@@ -267,6 +277,8 @@ pipeline {
             steps {
                 sh "docker push ${FULL_IMAGE}"
                 sh "docker push ${FULL_IMAGE_LATEST}"
+                // Push custom nginx image (config baked in, no bind-mount needed)
+                sh "docker push ${DOCKER_USERNAME}/devops-nginx:latest"
             }
         }
 
@@ -317,25 +329,13 @@ pipeline {
                             """.stripIndent()
                         )
 
-                        // Explicitly remove any stale nginx.conf directory that
-                        // a previous failed Docker bind-mount may have created,
-                        // then write the file so Docker sees a FILE not a DIR.
-                        sh "rm -rf ${DEPLOY_DIR}/nginx.conf"
-                        writeFile(
-                            file: "${DEPLOY_DIR}/nginx.conf",
-                            text: readFile("nginx/nginx.conf")
-                        )
-
                         sh """
                             echo '=== Deploy directory contents ==='
                             ls -la ${DEPLOY_DIR}/
-                            echo '=== nginx.conf type ==='
-                            file ${DEPLOY_DIR}/nginx.conf
-                            echo '=== nginx.conf (first 3 lines) ==='
-                            head -3 ${DEPLOY_DIR}/nginx.conf
+                            echo '=== docker-compose.yml preview ==='
+                            head -5 ${DEPLOY_DIR}/docker-compose.yml
                         """
 
-                        sh "docker pull ${FULL_IMAGE}"
                         sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml pull"
                         sh "docker compose --project-name ${COMPOSE_PROJECT} -f ${DEPLOY_DIR}/docker-compose.yml up -d --remove-orphans"
                     }
@@ -499,13 +499,11 @@ services:
       - app-network
 
   nginx:
-    image: nginx:alpine
+    image: ${dockerUsername}/devops-nginx:latest
     container_name: devops-nginx
     restart: unless-stopped
     ports:
       - "80:80"
-    volumes:
-      - ${deployDir}/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - app
     networks:
