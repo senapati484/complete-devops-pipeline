@@ -33,6 +33,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=deps /app/node_modules ./node_modules
+# Restore the generated Prisma client from the builder stage.
+# The deps stage only runs `npm ci --only=production` — it never runs
+# `prisma generate`, so node_modules/.prisma (the query engine binary)
+# is absent. Copying it from builder fixes the runtime error:
+#   "@prisma/client did not initialize yet. Please run prisma generate"
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/prisma ./prisma
 COPY --chmod=755 docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
